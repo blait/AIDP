@@ -75,9 +75,11 @@ with st.sidebar:
 
 # ============================================================
 # 메인 탭
+from src.agents.athena_agent import run_athena_query
+
 # ============================================================
-tab_kpi, tab_voc, tab_content, tab_report = st.tabs(
-    ["📊 KPI 대시보드", "📢 VOC 분석", "📝 콘텐츠 분석", "📋 종합 리포트"]
+tab_kpi, tab_voc, tab_content, tab_report, tab_athena = st.tabs(
+    ["📊 KPI 대시보드", "📢 VOC 분석", "📝 콘텐츠 분석", "📋 종합 리포트", "🔍 Athena 분석"]
 )
 
 # TAB 1: KPI
@@ -347,6 +349,65 @@ with tab_report:
             )
         else:
             st.markdown(st.session_state["result"].get("final_report", ""))
+# ============================================================
+# TAB 5: Athena 분석
+# ============================================================
+with tab_athena:
+    st.subheader("🔍 Athena Text-to-SQL 분석")
+    st.caption("자연어로 질문하면 SQL을 자동 생성하여 Athena에서 실행합니다.")
+
+    athena_query = st.text_input("질문을 입력하세요", placeholder="예: 최근 30일 DAU 트렌드를 보여줘", key="athena_input")
+
+    if st.button("🚀 쿼리 실행", key="athena_btn") and athena_query:
+        status = st.status("Athena 분석 진행 중...", expanded=True)
+        logs = []
+        placeholder = status.empty()
+
+        def on_athena_progress(msg):
+            logs.append(msg)
+            placeholder.markdown("\n\n".join(logs))
+
+        set_progress_callback(on_athena_progress)
+
+        result = run_athena_query(athena_query)
+        status.update(label="✅ 완료!", state="complete")
+        st.session_state["athena_result"] = result
+
+    if "athena_result" in st.session_state:
+        r = st.session_state["athena_result"]
+
+        # SQL 표시
+        if r.get("sql"):
+            with st.expander("📝 생성된 SQL", expanded=False):
+                st.code(r["sql"], language="sql")
+
+        # 결과 테이블
+        if r.get("results"):
+            st.subheader("📊 쿼리 결과")
+            result_df = pd.DataFrame(r["results"])
+
+            # 숫자 컬럼 변환
+            for col in result_df.columns:
+                try:
+                    result_df[col] = pd.to_numeric(result_df[col])
+                except (ValueError, TypeError):
+                    pass
+
+            st.dataframe(result_df, use_container_width=True, hide_index=True)
+
+            # 자동 차트: 날짜 컬럼 + 숫자 컬럼이 있으면 라인 차트
+            date_cols = [c for c in result_df.columns if "date" in c.lower()]
+            num_cols = result_df.select_dtypes(include="number").columns.tolist()
+            if date_cols and num_cols:
+                st.subheader("📈 차트")
+                chart_df = result_df.set_index(date_cols[0])[num_cols]
+                st.line_chart(chart_df)
+
+        # 인사이트
+        if r.get("insights"):
+            st.subheader("💡 인사이트")
+            st.markdown(r["insights"])
+
 # ============================================================
 # 하단 고정 챗봇
 # ============================================================

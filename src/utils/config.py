@@ -11,3 +11,6 @@ S3_VECTORS_INDEX_NAME = os.getenv("S3_VECTORS_INDEX_NAME", "naidp-index")
 BEDROCK_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "us.anthropic.claude-sonnet-4-6")
 BEDROCK_EMBEDDING_MODEL_ID = os.getenv("BEDROCK_EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v2:0")
 EMBEDDING_DIMENSION = 1024
+
+ATHENA_DATABASE = os.getenv("ATHENA_DATABASE", "naidp")
+ATHENA_OUTPUT_LOCATION = os.getenv("ATHENA_OUTPUT_LOCATION", "s3://naidp-data-986930576673/athena-results/")
