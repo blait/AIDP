@@ -41,7 +41,7 @@ updates는 최대 5개, gap_analysis는 최대 3개로 제한하세요."""
 def content_agent(state: AgentState) -> AgentState:
     notify("🔍 [Content Agent] 문서 검색 중...")
     query = state["query"]
-    docs = retrieve(f"콘텐츠 기획서 업데이트 패치노트 {query}", top_k=5)
+    docs = retrieve(f"콘텐츠 기획서 업데이트 패치노트 {query}", index_type="content", top_k=5)
     context = format_context(docs)
 
     notify("🤖 [Content Agent] Claude 분석 중...")

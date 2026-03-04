@@ -33,9 +33,10 @@ def chat(question: str, history: list, analysis_result: dict) -> str:
     # 분석 결과 컨텍스트
     analysis_ctx = build_analysis_context(analysis_result) if analysis_result else "분석 결과 없음"
 
-    # RAG 검색
-    rag_docs = retrieve(question, top_k=3)
-    rag_ctx = format_context(rag_docs) if rag_docs else "관련 문서 없음"
+    # RAG 검색 (VOC + Content 양쪽에서 검색)
+    voc_docs = retrieve(question, index_type="voc", top_k=2)
+    content_docs = retrieve(question, index_type="content", top_k=2)
+    rag_ctx = format_context(voc_docs + content_docs) if (voc_docs or content_docs) else "관련 문서 없음"
 
     system = SYSTEM_PROMPT.format(analysis_context=analysis_ctx, rag_context=rag_ctx)
 

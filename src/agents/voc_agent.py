@@ -32,7 +32,7 @@ top_issues는 최대 5개, severity 기준 내림차순으로 정렬하세요.""
 def voc_agent(state: AgentState) -> AgentState:
     notify("🔍 [VOC Agent] 문서 검색 중...")
     query = state["query"]
-    docs = retrieve(f"VOC 고객 불만 피드백 {query}", top_k=5)
+    docs = retrieve(f"VOC 고객 불만 피드백 {query}", index_type="voc", top_k=5)
     context = format_context(docs)
 
     notify("🤖 [VOC Agent] Claude 분석 중...")

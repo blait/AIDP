@@ -20,6 +20,9 @@ def parse_json(text: str) -> dict | None:
         match = re.search(r'```json\s*(.*?)\s*```', text, re.DOTALL)
         if match:
             return json.loads(match.group(1))
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
         return json.loads(text)
     except:
         return None
@@ -27,9 +30,13 @@ def parse_json(text: str) -> dict | None:
 
 @st.cache_data
 def load_kpi():
-    kpi_dir = Path("bedrock-sample/3.KPI")
-    dfs = [pd.read_csv(f, parse_dates=["log_date"]) for f in kpi_dir.glob("*.csv")]
-    df = pd.concat(dfs).sort_values("log_date").reset_index(drop=True)
+    from src.utils.athena_client import execute_query
+    df = execute_query("SELECT * FROM naidp.kpi ORDER BY log_date ASC")
+    for col in ["dau", "nu", "pu", "npu"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    for col in ["pur", "daily_sales", "daily_arppu", "daily_arpdau"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["log_date"] = pd.to_datetime(df["log_date"])
     df["daily_sales_억"] = df["daily_sales"] / 1e8
     df["weekly_avg_dau"] = df["dau"].rolling(7).mean()
     df["weekly_avg_sales"] = df["daily_sales_억"].rolling(7).mean()

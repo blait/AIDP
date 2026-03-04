@@ -11,15 +11,26 @@ from pathlib import Path
 def ingest():
     from src.rag.document_loader import load_documents_from_dir
     from src.rag.vector_store import setup_vector_store, upsert_documents
+    from src.utils.config import VECTOR_INDEXES
 
     print("=== 문서 인덱싱 시작 ===")
     setup_vector_store()
-    chunks = load_documents_from_dir("data/raw")
-    if not chunks:
-        print("data/raw 폴더에 PDF 파일이 없습니다.")
-        return
-    upsert_documents(chunks)
-    print(f"=== 인덱싱 완료: {len(chunks)}개 청크 ===")
+
+    # VOC 인덱스: VOC 보고서
+    voc_chunks = load_documents_from_dir("bedrock-sample/4.VOC보고서")
+    if voc_chunks:
+        upsert_documents(voc_chunks, VECTOR_INDEXES["voc"])
+        print(f"VOC 인덱스: {len(voc_chunks)}개 청크")
+
+    # Content 인덱스: 기획서 + 업데이트 내역
+    content_chunks = []
+    content_chunks.extend(load_documents_from_dir("bedrock-sample/1.콘텐츠기획서"))
+    content_chunks.extend(load_documents_from_dir("bedrock-sample/2.업데이트내역"))
+    if content_chunks:
+        upsert_documents(content_chunks, VECTOR_INDEXES["content"])
+        print(f"Content 인덱스: {len(content_chunks)}개 청크")
+
+    print(f"=== 인덱싱 완료 ===")
 
 
 def analyze(query: str):

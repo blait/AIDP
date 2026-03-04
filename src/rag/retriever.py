@@ -1,16 +1,26 @@
 import boto3
-from src.utils.config import AWS_REGION, S3_VECTORS_BUCKET_NAME, S3_VECTORS_INDEX_NAME
+from src.utils.config import AWS_REGION, S3_VECTORS_BUCKET_NAME, VECTOR_INDEXES
 from src.utils.bedrock_client import get_embedding
 
 
-def retrieve(query: str, top_k: int = 5) -> list[dict]:
-    """쿼리와 유사한 문서 청크 검색"""
+def retrieve(query: str, index_type: str = "voc", top_k: int = 5) -> list[dict]:
+    """지정된 인덱스에서 쿼리와 유사한 문서 청크 검색
+
+    Args:
+        query: 검색 쿼리
+        index_type: "voc" 또는 "content"
+        top_k: 반환할 결과 수
+    """
     client = boto3.client("s3vectors", region_name=AWS_REGION)
+    index_name = VECTOR_INDEXES.get(index_type)
+    if not index_name:
+        raise ValueError(f"Unknown index_type: {index_type}. Use: {list(VECTOR_INDEXES.keys())}")
+
     query_embedding = get_embedding(query)
 
     response = client.query_vectors(
         vectorBucketName=S3_VECTORS_BUCKET_NAME,
-        indexName=S3_VECTORS_INDEX_NAME,
+        indexName=index_name,
         queryVector={"float32": query_embedding},
         topK=top_k,
         returnMetadata=True,

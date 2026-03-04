@@ -69,34 +69,78 @@ aws bedrock list-foundation-models --region us-east-1 \
 
 ## Step 3: S3 Vectors 설정 (RAG)
 
-### 3.1 벡터 버킷 및 인덱스 생성
+### 3.1 S3 Vectors 버킷 생성
+
+S3 Vectors는 일반 S3 버킷과 다른 별도의 벡터 전용 버킷입니다.
 
 ```bash
-python3 -c "
-from src.rag.vector_store import setup_vector_store
-setup_vector_store()
-"
+aws s3vectors create-vector-bucket \
+  --vector-bucket-name naidp-vectors \
+  --region ap-northeast-2
 ```
 
-이 명령은 다음을 생성합니다:
-- S3 Vectors 버킷: `naidp-vectors`
-- 벡터 인덱스: `naidp-index` (float32, 1024 dim, cosine)
+확인:
+```bash
+aws s3vectors list-vector-buckets --region ap-northeast-2
+```
 
-### 3.2 문서 인덱싱
+### 3.2 벡터 인덱스 생성
+
+에이전트별로 분리된 인덱스를 생성합니다.
+
+**VOC 인덱스** (VOC 보고서 전용):
+```bash
+aws s3vectors create-index \
+  --vector-bucket-name naidp-vectors \
+  --index-name naidp-voc-index \
+  --data-type float32 \
+  --dimension 1024 \
+  --distance-metric cosine \
+  --metadata-configuration '{"nonFilterableMetadataKeys":["text","source","file_path","chunk_index"]}' \
+  --region ap-northeast-2
+```
+
+**Content 인덱스** (기획서 + 업데이트 내역 전용):
+```bash
+aws s3vectors create-index \
+  --vector-bucket-name naidp-vectors \
+  --index-name naidp-content-index \
+  --data-type float32 \
+  --dimension 1024 \
+  --distance-metric cosine \
+  --metadata-configuration '{"nonFilterableMetadataKeys":["text","source","file_path","chunk_index"]}' \
+  --region ap-northeast-2
+```
+
+인덱스 확인:
+```bash
+aws s3vectors list-indexes \
+  --vector-bucket-name naidp-vectors \
+  --region ap-northeast-2
+```
+
+> 또는 Python으로 한번에 생성:
+> ```bash
+> python3 -c "from src.rag.vector_store import setup_vector_store; setup_vector_store()"
+> ```
+
+### 3.3 문서 배치
 
 `bedrock-sample/` 폴더에 분석할 문서를 배치합니다:
 
 ```
 bedrock-sample/
-├── 1.콘텐츠기획서/    # PPTX 파일
-├── 2.업데이트내역/    # XLSX 파일
-├── 3.KPI/            # CSV 파일
-└── 4.VOC보고서/      # PDF/DOCX/TXT 파일
+├── 1.콘텐츠기획서/    # PPTX 파일 → naidp-content-index
+├── 2.업데이트내역/    # XLSX 파일 → naidp-content-index
+├── 3.KPI/            # CSV 파일 (KPI Agent가 직접 로드, RAG 미사용)
+└── 4.VOC보고서/      # PDF/DOCX/TXT 파일 → naidp-voc-index
     ├── 상세본/
     └── 요약본/
 ```
 
-인덱싱 실행:
+### 3.4 문서 임베딩 및 벡터 업로드
+
+문서를 텍스트 추출 → 청킹(1000자, 200자 오버랩) → Titan Embeddings 임베딩 → S3 Vectors 업로드:
 
 ```bash
 python3 -m src.main ingest
@@ -104,13 +148,33 @@ python3 -m src.main ingest
 
 출력 예시:
 ```
-Loading: 260218_kpi.csv → 60 chunks
-Loading: 성검.pptx → 2 chunks
+=== 문서 인덱싱 시작 ===
 Loading: _DK모바일_리본 커뮤니티 주간 동향.pdf → 11 chunks
 ...
-총 148개 청크 로드 완료
-Uploaded 148 vectors
+Uploaded 36 vectors → naidp-voc-index
+VOC 인덱스: 36개 청크
+Loading: 성검.pptx → 2 chunks
+Loading: 260212_업데이트내역_QA.xlsx → 50 chunks
+Uploaded 52 vectors → naidp-content-index
+Content 인덱스: 52개 청크
+=== 인덱싱 완료 ===
 ```
+
+### 3.5 업로드 확인
+
+```bash
+python3 -c "
+from src.rag.retriever import retrieve
+docs = retrieve('VOC 고객 불만', index_type='voc', top_k=1)
+print('VOC 인덱스:', '✅ 정상' if docs else '❌ 비어있음')
+docs = retrieve('업데이트 패치', index_type='content', top_k=1)
+print('Content 인덱스:', '✅ 정상' if docs else '❌ 비어있음')
+"
+```
+
+인덱스 분리 구조:
+- `naidp-voc-index`: `4.VOC보고서/` 하위 문서
+- `naidp-content-index`: `1.콘텐츠기획서/` + `2.업데이트내역/` 하위 문서
 
 ---
 

@@ -85,9 +85,9 @@ NAIDP(게임 인사이트 분석 플랫폼)는 게임 기업의 VOC, KPI, 콘텐
 
 | 항목 | 내용 |
 |------|------|
-| 데이터 소스 | Amazon S3 Vectors (RAG 시맨틱 검색, top_k=5) |
+| 데이터 소스 | Amazon S3 Vectors (RAG 시맨틱 검색, `naidp-voc-index`, top_k=5) |
 | 입력 | 사용자 쿼리 |
-| 처리 | RAG에서 VOC 관련 문서 검색 → Claude에게 분석 요청 |
+| 처리 | RAG에서 VOC 전용 인덱스 검색 → Claude에게 분석 요청 |
 | 출력 (JSON) | 감정 분포(긍정/중립/부정), 이슈 TOP5(제목/심각도/카테고리/조회수), 핵심 키워드, 요약, 위험도, 권고사항 |
 | 시각화 | 감정 바차트, 이슈 카드(심각도 배지), 키워드 태그 |
 
@@ -95,20 +95,20 @@ NAIDP(게임 인사이트 분석 플랫폼)는 게임 기업의 VOC, KPI, 콘텐
 
 | 항목 | 내용 |
 |------|------|
-| 데이터 소스 | CSV 직접 로드 (`bedrock-sample/3.KPI/*.csv`) |
-| 입력 | 사용자 쿼리 + CSV 전체 데이터 (307행) |
-| 처리 | CSV 원본을 Claude에게 직접 전달하여 분석 |
+| 데이터 소스 | Athena Agent를 통해 `naidp.kpi` 테이블 조회 |
+| 입력 | 사용자 쿼리 |
+| 처리 | Athena Agent에게 KPI 데이터 조회 요청 → 결과 수신 → Claude에게 분석 요청 |
 | 출력 (JSON) | 지표 하이라이트(트렌드/심각도), 이상 징후, 위험 요소, 요약, 권고사항 |
 | 시각화 | 트렌드 아이콘 카드, 경고 배너 |
-| 참고 | RAG를 사용하지 않음 — 수치 데이터는 전체를 전달하는 것이 더 정확 |
+| 참고 | Athena Agent의 SQL 생성→검증→실행→재시도 로직을 그대로 활용 |
 
 ### 3.3 Content Agent (`src/agents/content_agent.py`)
 
 | 항목 | 내용 |
 |------|------|
-| 데이터 소스 | Amazon S3 Vectors (RAG 시맨틱 검색, top_k=5) |
+| 데이터 소스 | Amazon S3 Vectors (RAG 시맨틱 검색, `naidp-content-index`, top_k=5) |
 | 입력 | 사용자 쿼리 |
-| 처리 | RAG에서 기획서/패치노트 검색 → Claude에게 분석 요청 |
+| 처리 | RAG에서 콘텐츠 전용 인덱스 검색 → Claude에게 분석 요청 |
 | 출력 (JSON) | 업데이트 현황(상태/카테고리), 콘텐츠 건강도(품질점수/빈도/만족도), Gap 분석(기획 vs 실제), 권고사항 |
 | 시각화 | 프로그레스바, 상태 카드, Gap 테이블 |
 
@@ -137,7 +137,7 @@ NAIDP(게임 인사이트 분석 플랫폼)는 게임 기업의 VOC, KPI, 콘텐
 
 | 항목 | 내용 |
 |------|------|
-| 데이터 소스 | 분석 결과 (session_state) + S3 Vectors (RAG, top_k=3) |
+| 데이터 소스 | 분석 결과 (session_state) + S3 Vectors (VOC 인덱스 top_k=2 + Content 인덱스 top_k=2) |
 | 입력 | 사용자 추가 질문 + 대화 히스토리 (최근 3턴) |
 | 처리 | 분석 결과 컨텍스트 + RAG 검색 결과를 system prompt에 포함 → Claude 응답 |
 | 위치 | 대시보드 하단 고정 (모든 탭에서 접근 가능) |
@@ -153,7 +153,8 @@ NAIDP(게임 인사이트 분석 플랫폼)는 게임 기업의 VOC, KPI, 콘텐
        │
        ▼
   VOC Agent ──→ KPI Agent ──→ Content Agent ──→ Report Agent
-  (RAG 검색)    (CSV 로드)    (RAG 검색)        (결과 종합)
+  (RAG 검색)    (Athena Agent  (RAG 검색)        (결과 종합)
+                 경유 조회)
   ↓              ↓              ↓                 ↓
   JSON           JSON           JSON              JSON
        │              │              │                │
@@ -199,31 +200,28 @@ NAIDP(게임 인사이트 분석 플랫폼)는 게임 기업의 VOC, KPI, 콘텐
 
 ### 5.1 RAG (S3 Vectors)
 
-| 원본 파일 | 형식 | 청크 수 | 사용 에이전트 |
-|-----------|------|---------|-------------|
-| VOC 보고서 상세본 (PDF/DOCX/TXT) | 텍스트 | ~22 | VOC Agent, Chatbot |
-| VOC 보고서 요약본 (PDF/DOCX/TXT) | 텍스트 | ~14 | VOC Agent, Chatbot |
-| 콘텐츠 기획서 (PPTX) | 텍스트 | ~2 | Content Agent, Chatbot |
-| 업데이트 내역 (XLSX) | 텍스트 | ~50 | Content Agent, Chatbot |
+| 인덱스 | 원본 파일 | 형식 | 청크 수 | 사용 에이전트 |
+|--------|-----------|------|---------|-------------|
+| `naidp-voc-index` | VOC 보고서 상세본 (PDF/DOCX/TXT) | 텍스트 | ~22 | VOC Agent, Chatbot |
+| `naidp-voc-index` | VOC 보고서 요약본 (PDF/DOCX/TXT) | 텍스트 | ~14 | VOC Agent, Chatbot |
+| `naidp-content-index` | 콘텐츠 기획서 (PPTX) | 텍스트 | ~2 | Content Agent, Chatbot |
+| `naidp-content-index` | 업데이트 내역 (XLSX) | 텍스트 | ~50 | Content Agent, Chatbot |
 
 - 벡터 버킷: `naidp-vectors`
-- 벡터 인덱스: `naidp-index`
+- 인덱스 분리: VOC 문서 → `naidp-voc-index`, 기획서/패치노트 → `naidp-content-index`
 - 임베딩: Amazon Titan Embeddings v2 (1024 dim, cosine)
 - 청킹: 1000자, 200자 오버랩
 
-### 5.2 CSV 직접 로드
+### 5.2 KPI 대시보드 차트
 
-| 파일 | 행 수 | 사용 에이전트 |
-|------|-------|-------------|
-| `bedrock-sample/3.KPI/260218_kpi.csv` | 307 | KPI Agent |
-
-- KPI 대시보드 차트도 이 CSV를 pandas로 직접 읽어서 렌더링
+- KPI 대시보드 탭의 차트는 `bedrock-sample/3.KPI/260218_kpi.csv`를 pandas로 직접 읽어서 렌더링
+- KPI Agent의 AI 분석은 Athena Agent를 경유하여 `naidp.kpi` 테이블에서 조회
 
 ### 5.3 Athena 테이블
 
 | 테이블 | S3 위치 | 컬럼 | 사용 에이전트 |
 |--------|---------|------|-------------|
-| `naidp.kpi` | `s3://naidp-data-986930576673/kpi/` | log_date, dau, nu, pu, npu, pur, daily_sales, daily_arppu, daily_arpdau | Athena Agent |
+| `naidp.kpi` | `s3://naidp-data-986930576673/kpi/` | log_date, dau, nu, pu, npu, pur, daily_sales, daily_arppu, daily_arpdau | KPI Agent (Athena Agent 경유), Athena Agent |
 | `naidp.transaction_map` | `s3://naidp-data-986930576673/transaction/` | sell_account, buy_account, sell_currency, market_type, cnt, total_price, first_date, last_date | Athena Agent |
 
 ---
@@ -234,7 +232,7 @@ NAIDP(게임 인사이트 분석 플랫폼)는 게임 기업의 VOC, KPI, 콘텐
 |--------|--------|------|------|
 | Bedrock | Claude Sonnet 4.6 (`us.anthropic.claude-sonnet-4-6`) | us-east-1 | LLM 추론 |
 | Bedrock | Titan Embeddings v2 | us-east-1 | 벡터 임베딩 |
-| S3 Vectors | `naidp-vectors` / `naidp-index` | ap-northeast-2 | RAG 벡터 저장/검색 |
+| S3 Vectors | `naidp-vectors` / `naidp-voc-index`, `naidp-content-index` | ap-northeast-2 | RAG 벡터 저장/검색 (인덱스 분리) |
 | S3 | `naidp-data-986930576673` | ap-northeast-2 | Athena 데이터 + 쿼리 결과 |
 | Athena | Database `naidp` | ap-northeast-2 | Text-to-SQL 쿼리 |
 
