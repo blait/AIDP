@@ -5,3 +5,8 @@ __pycache__/
 .DS_Store
 outputs/
 /tmp/
+
+# 민감 데이터
+bedrock-sample/
+claude_dashboard_v7/
+data/

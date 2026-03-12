@@ -126,17 +126,39 @@ aws s3vectors list-indexes \
 
 ### 3.3 문서 배치
 
-`bedrock-sample/` 폴더에 분석할 문서를 배치합니다:
+아래 폴더 구조에 맞게 분석할 문서를 배치합니다. 이 폴더들은 `.gitignore`에 포함되어 있으므로 직접 생성하고 파일을 넣어야 합니다.
+
+```bash
+mkdir -p bedrock-sample/{1.콘텐츠기획서,2.업데이트내역,3.KPI,4.VOC보고서/상세본,4.VOC보고서/요약본}
+```
 
 ```
 bedrock-sample/
-├── 1.콘텐츠기획서/    # PPTX 파일 → naidp-content-index
-├── 2.업데이트내역/    # XLSX 파일 → naidp-content-index
-├── 3.KPI/            # CSV 파일 (KPI Agent가 직접 로드, RAG 미사용)
-└── 4.VOC보고서/      # PDF/DOCX/TXT 파일 → naidp-voc-index
+├── 1.콘텐츠기획서/        → naidp-content-index (RAG)
+│   └── *.pptx             # 콘텐츠 기획서 (예: 성검.pptx)
+│
+├── 2.업데이트내역/        → naidp-content-index (RAG)
+│   └── *.xlsx             # 업데이트/패치 내역 (예: 260212_업데이트내역_QA.xlsx)
+│
+├── 3.KPI/                 → Athena 테이블 (S3 업로드 필요)
+│   └── *.csv              # KPI 데이터 (예: 260218_kpi.csv)
+│                           # 컬럼: log_date,dau,nu,pu,npu,pur,daily_sales,daily_arppu,daily_arpdau
+│
+└── 4.VOC보고서/           → naidp-voc-index (RAG)
     ├── 상세본/
+    │   └── *.pdf, *.docx, *.txt   # VOC 상세 보고서
     └── 요약본/
+        └── *.pdf, *.docx, *.txt   # VOC 요약 보고서
 ```
+
+추가로 거래 데이터가 있는 경우:
+```
+claude_dashboard_v7/       → Athena 테이블 (S3 업로드 필요)
+└── *.csv                  # 거래 데이터
+                           # 컬럼: sell_account,buy_account,sell_currency,market_type,cnt,total_price,first_date,last_date
+```
+
+> ⚠️ `bedrock-sample/`과 `claude_dashboard_v7/`은 회사 민감 데이터를 포함하므로 git에 포함되지 않습니다. 각 환경에서 직접 배치해야 합니다.
 
 ### 3.4 문서 임베딩 및 벡터 업로드
 
