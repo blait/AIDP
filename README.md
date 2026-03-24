@@ -2,6 +2,9 @@
 
 게임 기업의 VOC, KPI, 콘텐츠 기획서, 업데이트 내역을 종합 분석하여 인사이트 리포트를 자동 생성하는 AI 멀티 에이전트 시스템.
 
+
+<img width="542" height="431" alt="image" src="https://github.com/user-attachments/assets/4ef88aa8-47cc-4a44-bb38-9d96a188ac2a" />
+
 ## 아키텍처
 
 ```
@@ -55,8 +58,7 @@
 | Content Agent | S3 Vectors (RAG) | 업데이트 현황, 건강도, Gap 분석 (JSON) |
 | Report Agent | 위 3개 결과 종합 | 스코어카드, 교차 인사이트, 액션 아이템 (JSON) |
 
-##스크린 샷 
-<img width="542" height="431" alt="image" src="https://github.com/user-attachments/assets/4ef88aa8-47cc-4a44-bb38-9d96a188ac2a" />
+
 
 
 
